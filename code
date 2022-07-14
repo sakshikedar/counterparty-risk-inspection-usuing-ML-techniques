@@ -1,0 +1,1536 @@
+1. Installing
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import plotly.offline as py 
+py.init_notebook_mode(connected=True)                  # this code, allow us to work with offline plotly version
+import plotly.graph_objs as go                         # it's like "plt" of matplot
+import plotly.tools as tls                             # It's useful to we get some tools of plotly
+from collections import Counter                        # To do counter of some features
+import plotly.figure_factory as ff
+from sklearn.model_selection import train_test_split, KFold, cross_val_score, GridSearchCV                                         # to split the data
+from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, confusion_matrix, classification_report, fbeta_score     # to evaluate our model
+!pip install lightgbm
+Requirement already satisfied: lightgbm in c:\programdata\anaconda3\lib\site-packages (3.3.2)
+Requirement already satisfied: scipy in c:\programdata\anaconda3\lib\site-packages (from lightgbm) (1.6.2)
+Requirement already satisfied: numpy in c:\programdata\anaconda3\lib\site-packages (from lightgbm) (1.20.1)
+Requirement already satisfied: scikit-learn!=0.22.0 in c:\programdata\anaconda3\lib\site-packages (from lightgbm) (0.24.1)
+Requirement already satisfied: wheel in c:\programdata\anaconda3\lib\site-packages (from lightgbm) (0.36.2)
+Requirement already satisfied: joblib>=0.11 in c:\programdata\anaconda3\lib\site-packages (from scikit-learn!=0.22.0->lightgbm) (1.0.1)
+Requirement already satisfied: threadpoolctl>=2.0.0 in c:\programdata\anaconda3\lib\site-packages (from scikit-learn!=0.22.0->lightgbm) (2.1.0)
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.naive_bayes import GaussianNB
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+import warnings
+
+from sklearn.exceptions import ConvergenceWarning
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter("ignore", category=ConvergenceWarning)
+
+pd.pandas.set_option('display.max_columns', None)
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+
+print(14 * " >", "\t n.B.a. \t", "< " * 14, "\n\n\n")
+ > > > > > > > > > > > > > > 	 n.B.a. 	 < < < < < < < < < < < < < <  
+
+
+
+EDA (Exploratory of Data Analysis)
+2.1. Data Preperation
+df = pd.read_csv(r"C:\Users\Dell\Downloads\german_credit_data.csv", index_col=0)
+df.head()
+Age	Sex	Job	Housing	Saving accounts	Checking account	Credit amount	Duration	Purpose	Risk
+0	67	male	2	own	NaN	little	1169	6	radio/TV	good
+1	22	female	2	own	little	moderate	5951	48	radio/TV	bad
+2	49	male	1	own	little	NaN	2096	12	education	good
+3	45	male	2	free	little	little	7882	42	furniture/equipment	good
+4	53	male	2	free	little	little	4870	24	car	bad
+Let's check NaN values:
+
+df.isnull().sum()
+Age                   0
+Sex                   0
+Job                   0
+Housing               0
+Saving accounts     183
+Checking account    394
+Credit amount         0
+Duration              0
+Purpose               0
+Risk                  0
+dtype: int64
+check what we have for instance missing value and numeric/object fature observing:
+
+df.info()
+<class 'pandas.core.frame.DataFrame'>
+Int64Index: 1000 entries, 0 to 999
+Data columns (total 10 columns):
+ #   Column            Non-Null Count  Dtype 
+---  ------            --------------  ----- 
+ 0   Age               1000 non-null   int64 
+ 1   Sex               1000 non-null   object
+ 2   Job               1000 non-null   int64 
+ 3   Housing           1000 non-null   object
+ 4   Saving accounts   817 non-null    object
+ 5   Checking account  606 non-null    object
+ 6   Credit amount     1000 non-null   int64 
+ 7   Duration          1000 non-null   int64 
+ 8   Purpose           1000 non-null   object
+ 9   Risk              1000 non-null   object
+dtypes: int64(4), object(6)
+memory usage: 85.9+ KB
+cat_cols = [col for col in df.columns if df[col].dtypes == 'O']
+
+for col in cat_cols:
+    print(df[col].value_counts(), "\n\n")
+male      690
+female    310
+Name: Sex, dtype: int64 
+
+
+own     713
+rent    179
+free    108
+Name: Housing, dtype: int64 
+
+
+little        603
+moderate      103
+quite rich     63
+rich           48
+Name: Saving accounts, dtype: int64 
+
+
+little      274
+moderate    269
+rich         63
+Name: Checking account, dtype: int64 
+
+
+car                    337
+radio/TV               280
+furniture/equipment    181
+business                97
+education               59
+repairs                 22
+domestic appliances     12
+vacation/others         12
+Name: Purpose, dtype: int64 
+
+
+good    700
+bad     300
+Name: Risk, dtype: int64 
+
+
+'Target' variable distribution with visual:
+
+trace0 = go.Bar(
+            x = df[df["Risk"]== 'good']["Risk"].value_counts().index.values,
+            y = df[df["Risk"]== 'good']["Risk"].value_counts().values,
+            name='Good credit')
+
+trace1 = go.Bar(
+            x = df[df["Risk"]== 'bad']["Risk"].value_counts().index.values,
+            y = df[df["Risk"]== 'bad']["Risk"].value_counts().values,
+            name='Bad credit')
+
+
+data = [trace0, trace1]
+layout = go.Layout(
+    yaxis=dict(
+        title='Count'
+    ),
+    xaxis=dict(
+        title='Risk Variable'
+    ),
+    title='Target variable distribution'
+)
+
+fig = go.Figure(data=data, layout=layout)
+fig.data[0].marker.line.width = 4
+fig.data[0].marker.line.color = "black"
+fig.data[1].marker.line.width = 4
+fig.data[1].marker.line.color = "black"
+py.iplot(fig, filename='grouped-bar')
+2.2 Numerical Variable Analysis
+num_cols = [col for col in df.columns if df[col].dtypes != 'O' and col not in "Id"]
+print('Number of Numerical Variable: ', len(num_cols))
+
+
+def hist_for_nums(data, numeric_cols):
+    col_counter = 0
+    data = data.copy()
+    for col in numeric_cols:
+        data[col].plot.hist(alpha=0.5, color='y')
+        plt.xlabel(col)
+        plt.title(col)
+        plt.show()
+        col_counter += 1
+    print(col_counter, "variables have been plotted")
+
+
+hist_for_nums(df, num_cols)
+Number of Numerical Variable:  4
+
+
+
+
+4 variables have been plotted
+Let's see general version:
+
+df_good = df.loc[df["Risk"] == 'good']['Age'].values.tolist()
+df_bad = df.loc[df["Risk"] == 'bad']['Age'].values.tolist()
+df_age = df['Age'].values.tolist()
+
+#First plot
+trace0 = go.Histogram(
+    x=df_good,
+    histnorm='probability',
+    name="Good Credit"
+)
+#Second plot
+trace1 = go.Histogram(
+    x=df_bad,
+    histnorm='probability',
+    name="Bad Credit"
+)
+#Third plot
+trace2 = go.Histogram(
+    x=df_age,
+    histnorm='probability',
+    name="Overall Age"
+)
+
+#Creating the grid
+fig = tls.make_subplots(rows=2, cols=2, specs=[[{}, {}], [{'colspan': 2}, None]],
+                          subplot_titles=('Good','Bad', 'General Distribuition'))
+
+#setting the figs
+fig.append_trace(trace0, 1, 1)
+fig.append_trace(trace1, 1, 2)
+fig.append_trace(trace2, 2, 1)
+
+fig['layout'].update(showlegend=True, title='Age Distribuition', bargap=0.05)
+py.iplot(fig, filename='custom-sized-subplot-with-subplot-titles')
+C:\ProgramData\Anaconda3\lib\site-packages\plotly\tools.py:461: DeprecationWarning:
+
+plotly.tools.make_subplots is deprecated, please use plotly.subplots.make_subplots instead
+
+Let's see together in graphs accordings to Frequency and Count:
+
+df_good = df[df["Risk"] == 'good']
+df_bad = df[df["Risk"] == 'bad']
+
+fig, ax = plt.subplots(nrows=2, figsize=(12,8))
+plt.subplots_adjust(hspace = 0.4, top = 0.8)
+
+g1 = sns.distplot(df_good["Age"], ax=ax[0], 
+             color="g")
+g1 = sns.distplot(df_bad["Age"], ax=ax[0], 
+             color='r')
+g1.set_title("Age Distribuition", fontsize=15)
+g1.set_xlabel("Age")
+g1.set_xlabel("Frequency")
+
+g2 = sns.countplot(x="Age",data=df, 
+              palette="hls", ax=ax[1], 
+              hue = "Risk")
+g2.set_title("Age Counting by Risk", fontsize=15)
+g2.set_xlabel("Age")
+g2.set_xlabel("Count")
+plt.show()
+
+It can be seen that the "Age" variable is very important. Because of the need, I create categorical variables according to the Age variable. And let's re-create df_bad dataframes with df_good we created.
+
+#Let's look the Credit Amount column
+interval = (18, 25, 35, 60, 120)
+
+cats = ['Student', 'Young', 'Adult', 'Senior']
+df["Age_cat"] = pd.cut(df.Age, interval, labels=cats)
+
+# And let's re-create "df_bad" dataframes with "df_good" we created.
+df_good = df[df["Risk"] == 'good']
+df_bad = df[df["Risk"] == 'bad']
+Let's visualize it again according to the last created.
+
+trace0 = go.Box(
+    y=df_good["Credit amount"],
+    x=df_good["Age_cat"],
+    name='Good credit',
+    marker=dict(
+        color='LightSkyBlue'
+    )
+)
+
+trace1 = go.Box(
+    y=df_bad['Credit amount'],
+    x=df_bad['Age_cat'],
+    name='Bad credit',
+    marker=dict(
+        color='DarkSlateGrey'
+    )
+)
+    
+data = [trace0, trace1]
+
+layout = go.Layout(
+    yaxis=dict(
+        title='Credit Amount (US Dollar)',
+        zeroline=False
+    ),
+    xaxis=dict(
+        title='Age Categorical'
+    ),
+    boxmode='group'
+)
+fig = go.Figure(data=data, layout=layout)
+
+py.iplot(fig, filename='box-age-cat')
+Now let's look at the breakdown of Leaseholder and Rent by Risk:
+
+#First plot
+trace0 = go.Bar(
+    x = df[df["Risk"]== 'good']["Housing"].value_counts().index.values,
+    y = df[df["Risk"]== 'good']["Housing"].value_counts().values,
+    name='Good credit'
+)
+
+#Second plot
+trace1 = go.Bar(
+    x = df[df["Risk"]== 'bad']["Housing"].value_counts().index.values,
+    y = df[df["Risk"]== 'bad']["Housing"].value_counts().values,
+    name="Bad Credit"
+)
+
+data = [trace0, trace1]
+
+layout = go.Layout(
+    title='Housing Distribuition'
+)
+
+
+fig = go.Figure(data=data, layout=layout)
+fig.data[0].marker.line.width = 4
+fig.data[0].marker.line.color = "black"
+fig.data[1].marker.line.width = 4
+fig.data[1].marker.line.color = "black"
+
+py.iplot(fig, filename='Housing-Grouped')
+Distribuition of Credit Amount by Housing visualization:
+Focus on the highest values count from the category of "free" and we have a different distribution by Risk
+
+fig = {
+    "data": [
+        {
+            "type": 'violin',
+            "x": df_good['Housing'],
+            "y": df_good['Credit amount'],
+            "legendgroup": 'Good Credit',
+            "scalegroup": 'No',
+            "name": 'Good Credit',
+            "side": 'negative',
+            "box": {
+                "visible": True
+            },
+            "meanline": {
+                "visible": True
+            },
+            "line": {
+                "color": '#673D43'
+            }
+        },
+        {
+            "type": 'violin',
+            "x": df_bad['Housing'],
+            "y": df_bad['Credit amount'],
+            "legendgroup": 'Bad Credit',
+            "scalegroup": 'No',
+            "name": 'Bad Credit',
+            "side": 'positive',
+            "box": {
+                "visible": True
+            },
+            "meanline": {
+                "visible": True
+            },
+            "line": {
+                "color": '#AB9C2B'
+            }
+        }
+    ],
+    "layout" : {
+        "yaxis": {
+            "zeroline": False,
+        },
+        "violingap": 0,
+        "violinmode": "overlay"
+    }
+}
+
+
+py.iplot(fig, filename = 'violin/split', validate = False)
+Looking the diference by Sex visualization:
+
+#First plot
+trace0 = go.Bar(
+    x = df[df["Risk"]== 'good']["Sex"].value_counts().index.values,
+    y = df[df["Risk"]== 'good']["Sex"].value_counts().values,
+    name='Good credit'
+)
+
+#First plot 2
+trace1 = go.Bar(
+    x = df[df["Risk"]== 'bad']["Sex"].value_counts().index.values,
+    y = df[df["Risk"]== 'bad']["Sex"].value_counts().values,
+    name="Bad Credit"
+)
+
+#Second plot
+trace2 = go.Box(
+    x = df[df["Risk"]== 'good']["Sex"],
+    y = df[df["Risk"]== 'good']["Credit amount"],
+    name=trace0.name
+)
+
+#Second plot 2
+trace3 = go.Box(
+    x = df[df["Risk"]== 'bad']["Sex"],
+    y = df[df["Risk"]== 'bad']["Credit amount"],
+    name=trace1.name
+)
+
+data = [trace0, trace1, trace2,trace3]
+
+fig = tls.make_subplots(rows=1, cols=2, 
+                        subplot_titles=('Sex Count', 'Credit Amount by Sex'))
+
+fig.append_trace(trace0, 1, 1)
+fig.append_trace(trace1, 1, 1)
+fig.append_trace(trace2, 1, 2)
+fig.append_trace(trace3, 1, 2)
+
+fig['layout'].update(height=400, width=800, title='Sex Distribuition', boxmode='group')
+py.iplot(fig, filename='sex-subplot')
+C:\ProgramData\Anaconda3\lib\site-packages\plotly\tools.py:461: DeprecationWarning:
+
+plotly.tools.make_subplots is deprecated, please use plotly.subplots.make_subplots instead
+
+Let's create age categories and look at the distribution of Loan Amount by Riskand try to do some research on Credit Amount by Age Crossed Work, and Distribution.
+
+Distribuition
+#First plot
+trace0 = go.Bar(
+    x = df[df["Risk"]== 'good']["Job"].value_counts().index.values,
+    y = df[df["Risk"]== 'good']["Job"].value_counts().values,
+    name='Good credit Distribuition'
+)
+
+#Second plot
+trace1 = go.Bar(
+    x = df[df["Risk"]== 'bad']["Job"].value_counts().index.values,
+    y = df[df["Risk"]== 'bad']["Job"].value_counts().values,
+    name="Bad Credit Distribuition"
+)
+
+data = [trace0, trace1]
+
+layout = go.Layout(
+    title='Job Distribuition'
+)
+
+fig = go.Figure(data=data, layout=layout)
+fig.data[0].marker.line.width = 4
+fig.data[0].marker.line.color = "black"
+fig.data[1].marker.line.width = 4
+fig.data[1].marker.line.color = "black"
+py.iplot(fig, filename='grouped-bar')
+Crossed by Credit amount and Age
+trace0 = go.Box(
+    x=df_good["Job"],
+    y=df_good["Credit amount"],
+    name='Good credit',
+    marker=dict(
+        color='LightSkyBlue')
+)
+
+trace1 = go.Box(
+    x=df_bad['Job'],
+    y=df_bad['Credit amount'],
+    name='Bad credit',
+    marker=dict(
+        color='DarkSlateGrey')
+)
+    
+data = [trace0, trace1]
+
+layout = go.Layout(
+    yaxis=dict(
+        title='Credit Amount distribuition by Job',
+        zeroline=False
+    ),
+    xaxis=dict(
+        title='Age Categorical'
+    ),
+    boxmode='group'
+)
+fig = go.Figure(data=data, layout=layout)
+
+py.iplot(fig, filename='box-age-cat')
+fig = {
+    "data": [
+        {
+            "type": 'violin',
+            "x": df_good['Job'],
+            "y": df_good['Age'],
+            "legendgroup": 'Good Credit',
+            "scalegroup": 'No',
+            "name": 'Good Credit',
+            "side": 'negative',
+            "box": {
+                "visible": True
+            },
+            "meanline": {
+                "visible": True
+            },
+            "line": {
+                "color": '#673D43'
+            }
+        },
+        {
+            "type": 'violin',
+            "x": df_bad['Job'],
+            "y": df_bad['Age'],
+            "legendgroup": 'Bad Credit',
+            "scalegroup": 'No',
+            "name": 'Bad Credit',
+            "side": 'positive',
+            "box": {
+                "visible": True
+            },
+            "meanline": {
+                "visible": True
+            },
+            "line": {
+                "color": 'green'
+            }
+        }
+    ],
+    "layout" : {
+        "yaxis": {
+            "zeroline": False,
+        },
+        "violingap": 0,
+        "violinmode": "overlay"
+    }
+}
+
+
+py.iplot(fig, filename = 'Age-Housing', validate = False)
+See relation between:
+
+1) Credit Amount by Job, 2) Job Reference, 3) Credit Amount, 4) Job Type reference by Age, 5) Job Reference
+
+fig, ax = plt.subplots(figsize=(12,12), nrows=2)
+
+g1 = sns.boxplot(x="Job", y="Credit amount", data=df, 
+            palette="husl", ax=ax[0], hue="Risk")
+g1.set_title("Credit Amount by Job", fontsize=15)
+g1.set_xlabel("Job Reference", fontsize=12)
+g1.set_ylabel("Credit Amount", fontsize=12)
+
+g2 = sns.violinplot(x="Job", y="Age", data=df, ax=ax[1],  
+               hue="Risk", split=True, palette="Blues")
+g2.set_title("Job Type reference x Age", fontsize=15)
+g2.set_xlabel("Job Reference", fontsize=12)
+g2.set_ylabel("Age", fontsize=12)
+
+plt.subplots_adjust(hspace = 0.4,top = 0.9)
+
+plt.show()
+
+The distribuition of Credit Amont:
+# Add histogram data
+x1 = np.log(df_good['Credit amount']) 
+x2 = np.log(df_bad["Credit amount"])
+
+# Group data together
+hist_data = [x1, x2]
+
+group_labels = ['Good Credit', 'Bad Credit']
+colors = ['rgb(0, 0, 100)', 'rgb(0, 200, 200)']
+
+# Create distplot with custom bin_size
+fig = ff.create_distplot(hist_data, group_labels, bin_size=.1, colors=colors)
+
+# Plot!
+py.iplot(fig, filename='Distplot with Multiple Datasets')
+Credit Amount Frequency distribuition:
+#Ploting the good and bad dataframes in distplot
+plt.figure(figsize = (8,5))
+
+g= sns.distplot(df_good['Credit amount'], color='y')
+g = sns.distplot(df_bad["Credit amount"], color='g')
+g.set_title("Credit Amount Frequency distribuition", fontsize=18)
+plt.show()
+
+Distruibution of Saving accounts by Risk:
+count_good = go.Bar(
+    x = df_good["Saving accounts"].value_counts().index.values,
+    y = df_good["Saving accounts"].value_counts().values,
+    name='Good credit'
+)
+count_bad = go.Bar(
+    x = df_bad["Saving accounts"].value_counts().index.values,
+    y = df_bad["Saving accounts"].value_counts().values,
+    name='Bad credit'
+)
+
+
+box_1 = go.Box(
+    x=df_good["Saving accounts"],
+    y=df_good["Credit amount"],
+    name='Good credit'
+)
+box_2 = go.Box(
+    x=df_bad["Saving accounts"],
+    y=df_bad["Credit amount"],
+    name='Bad credit'
+)
+
+scat_1 = go.Box(
+    x=df_good["Saving accounts"],
+    y=df_good["Age"],
+    name='Good credit'
+)
+scat_2 = go.Box(
+    x=df_bad["Saving accounts"],
+    y=df_bad["Age"],
+    name='Bad credit'
+)
+
+data = [scat_1, scat_2, box_1, box_2, count_good, count_bad]
+
+fig = tls.make_subplots(rows=2, cols=2, specs=[[{}, {}], [{'colspan': 2}, None]],
+                          subplot_titles=('Count Saving Accounts','Credit Amount by Savings Acc', 
+                                          'Age by Saving accounts'))
+
+fig.append_trace(count_good, 1, 1)
+fig.append_trace(count_bad, 1, 1)
+
+fig.append_trace(box_2, 1, 2)
+fig.append_trace(box_1, 1, 2)
+
+fig.append_trace(scat_1, 2, 1)
+fig.append_trace(scat_2, 2, 1)
+
+
+
+fig['layout'].update(height=700, width=800, title='Saving Accounts Exploration', boxmode='group')
+
+py.iplot(fig, filename='combined-savings')
+C:\ProgramData\Anaconda3\lib\site-packages\plotly\tools.py:461: DeprecationWarning:
+
+plotly.tools.make_subplots is deprecated, please use plotly.subplots.make_subplots instead
+
+Lets see together another version:
+
+print("Description of Distribuition Saving accounts by Risk:  ")
+print(pd.crosstab(df["Saving accounts"],df.Risk))
+
+fig, ax = plt.subplots(3,1, figsize=(12,12))
+g = sns.countplot(x="Saving accounts", data=df, palette="husl", 
+              ax=ax[0],hue="Risk")
+g.set_title("Saving Accounts Count", fontsize=15)
+g.set_xlabel("Saving Accounts type", fontsize=12)
+g.set_ylabel("Count", fontsize=12)
+
+g1 = sns.violinplot(x="Saving accounts", y="Job", data=df, palette="Blues", 
+               hue = "Risk", ax=ax[1],split=True)
+g1.set_title("Saving Accounts by Job", fontsize=15)
+g1.set_xlabel("Savings Accounts type", fontsize=12)
+g1.set_ylabel("Job", fontsize=12)
+
+g = sns.boxplot(x="Saving accounts", y="Credit amount", data=df, ax=ax[2],
+            hue = "Risk",palette="pastel")
+g2.set_title("Saving Accounts by Credit Amount", fontsize=15)
+g2.set_xlabel("Savings Accounts type", fontsize=12)
+g2.set_ylabel("Credit Amount(US)", fontsize=12)
+
+plt.subplots_adjust(hspace = 0.4,top = 0.9)
+
+plt.show()
+Description of Distribuition Saving accounts by Risk:  
+Risk             bad  good
+Saving accounts           
+little           217   386
+moderate          34    69
+quite rich        11    52
+rich               6    42
+
+Let's try to see which products they want to buy according to their ages and their quantities.
+
+print("Values describe: ")
+print(pd.crosstab(df.Purpose, df.Risk))
+
+plt.figure(figsize = (14,12))
+
+plt.subplot(221)
+g = sns.countplot(x="Purpose", data=df, 
+              palette="husl", hue = "Risk")
+g.set_xticklabels(g.get_xticklabels(),rotation=45)
+g.set_xlabel("", fontsize=12)
+g.set_ylabel("Count", fontsize=12)
+g.set_title("Purposes Count", fontsize=20)
+
+plt.subplot(222)
+g1 = sns.violinplot(x="Purpose", y="Age", data=df, 
+                    palette="Blues", hue = "Risk",split=True)
+g1.set_xticklabels(g1.get_xticklabels(),rotation=45)
+g1.set_xlabel("", fontsize=12)
+g1.set_ylabel("Count", fontsize=12)
+g1.set_title("Purposes by Age", fontsize=20)
+
+plt.subplot(212)
+g2 = sns.boxplot(x="Purpose", y="Credit amount", data=df, 
+               palette="Set2", hue = "Risk")
+g2.set_xlabel("Purposes", fontsize=12)
+g2.set_ylabel("Credit Amount", fontsize=12)
+g2.set_title("Credit Amount distribuition by Purposes", fontsize=20)
+
+plt.subplots_adjust(hspace = 0.6, top = 0.8)
+
+plt.show()
+Values describe: 
+Risk                 bad  good
+Purpose                       
+business              34    63
+car                  106   231
+domestic appliances    4     8
+education             23    36
+furniture/equipment   58   123
+radio/TV              62   218
+repairs                8    14
+vacation/others        5     7
+
+Duration of the credits distribuition and density:
+As seen, the 12th, 18th and 20th months are the time periods with the highest distribution.
+
+plt.figure(figsize = (12,14))
+
+g= plt.subplot(311)
+g = sns.countplot(x="Duration", data=df, 
+              palette="husl",  hue = "Risk")
+g.set_xlabel("Duration Distribuition", fontsize=12)
+g.set_ylabel("Count", fontsize=12)
+g.set_title("Duration Count", fontsize=20)
+
+g1 = plt.subplot(312)
+g1 = sns.pointplot(x="Duration", y ="Credit amount",data=df,
+                   hue="Risk", palette="Set2")
+g1.set_xlabel("Duration", fontsize=12)
+g1.set_ylabel("Credit Amount(US)", fontsize=12)
+g1.set_title("Credit Amount distribuition by Duration", fontsize=20)
+
+g2 = plt.subplot(313)
+g2 = sns.distplot(df_good["Duration"], color='y')
+g2 = sns.distplot(df_bad["Duration"], color='b')
+g2.set_xlabel("Duration", fontsize=12)
+g2.set_ylabel("Frequency", fontsize=12)
+g2.set_title("Duration Frequency x good and bad Credit", fontsize=20)
+
+plt.subplots_adjust(wspace = 0.4, hspace = 0.4,top = 0.9)
+
+plt.show()
+
+Checking Account variable
+First, let's look the distribuition:
+
+#First plot
+trace0 = go.Bar(
+    x = df[df["Risk"]== 'good']["Checking account"].value_counts().index.values,
+    y = df[df["Risk"]== 'good']["Checking account"].value_counts().values,
+    name='Good credit Distribuition' 
+    
+)
+
+#Second plot
+trace1 = go.Bar(
+    x = df[df["Risk"]== 'bad']["Checking account"].value_counts().index.values,
+    y = df[df["Risk"]== 'bad']["Checking account"].value_counts().values,
+    name="Bad Credit Distribuition"
+)
+
+data = [trace0, trace1]
+
+layout = go.Layout(
+    title='Checking accounts Distribuition',
+    xaxis=dict(title='Checking accounts name'),
+    yaxis=dict(title='Count'),
+    barmode='group'
+)
+
+
+fig = go.Figure(data=data, layout=layout)
+fig.data[0].marker.line.width = 4
+fig.data[0].marker.line.color = "black"
+fig.data[1].marker.line.width = 4
+fig.data[1].marker.line.color = "black"
+py.iplot(fig, filename = 'Age-ba', validate = False)
+Now, we will verify the values through Checking Accounts
+
+df_good = df[df["Risk"] == 'good']
+df_bad = df[df["Risk"] == 'bad']
+
+trace0 = go.Box(
+    y=df_good["Credit amount"],
+    x=df_good["Checking account"],
+    name='Good credit'
+)
+
+trace1 = go.Box(
+    y=df_bad['Credit amount'],
+    x=df_bad['Checking account'],
+    name='Bad credit'
+    
+)
+    
+data = [trace0, trace1]
+
+layout = go.Layout(
+    yaxis=dict(
+        title='Cheking distribuition'
+    ),
+    boxmode='group'
+)
+fig = go.Figure(data=data, layout=layout)
+
+py.iplot(fig, filename='box-age-cat')
+Now let's try to perform a merge between variables according to the above.
+
+print("Total values of the most missing variable: ")
+print(df.groupby("Checking account")["Checking account"].count())
+
+plt.figure(figsize = (12,10))
+
+g = plt.subplot(221)
+g = sns.countplot(x="Checking account", data=df, 
+              palette="husl", hue="Risk")
+g.set_xlabel("Checking Account", fontsize=12)
+g.set_ylabel("Count", fontsize=12)
+g.set_title("Checking Account Counting by Risk", fontsize=20)
+
+g1 = plt.subplot(222)
+g1 = sns.violinplot(x="Checking account", y="Age", data=df, palette="Set2", hue = "Risk",split=True)
+g1.set_xlabel("Checking Account", fontsize=12)
+g1.set_ylabel("Age", fontsize=12)
+g1.set_title("Age by Checking Account", fontsize=20)
+
+g2 = plt.subplot(212)
+g2 = sns.boxplot(x="Checking account",y="Credit amount", data=df,hue='Risk',palette="pastel")
+g2.set_xlabel("Checking Account", fontsize=12)
+g2.set_ylabel("Credit Amount(US)", fontsize=12)
+g2.set_title("Credit Amount by Cheking Account", fontsize=20)
+
+plt.subplots_adjust(wspace = 0.2, hspace = 0.3, top = 0.9)
+
+plt.show()
+plt.show()
+Total values of the most missing variable: 
+Checking account
+little      274
+moderate    269
+rich         63
+Name: Checking account, dtype: int64
+
+The distribution of having a job with hosting:
+
+plt.figure(figsize = (10,6))
+
+g = sns.violinplot(x="Housing",y="Job",data=df,
+                   hue="Risk", palette="deep", as_cmap=True, split=True)
+g.set_xlabel("Housing", fontsize=12)
+g.set_ylabel("Job", fontsize=12)
+g.set_title("Housing x Job - Dist", fontsize=20)
+
+plt.show()
+
+Let's illustrate with numbers and crosstab:
+
+print("Job status by gender", pd.crosstab(df.Sex, df.Job), sep="\n\n")
+
+
+print("\n\n\nAccount status by gender\n\n", pd.crosstab(df["Checking account"],df.Sex))
+Job status by gender
+
+Job      0    1    2    3
+Sex                      
+female  12   64  197   37
+male    10  136  433  111
+
+
+
+Account status by gender
+
+ Sex               female  male
+Checking account              
+little                88   186
+moderate              86   183
+rich                  20    43
+date_int = ["Purpose", 'Sex']
+#cm = sns.light_palette("green", as_cmap=True)
+pd.crosstab(df[date_int[0]], df[date_int[1]]).style.background_gradient(cmap = "viridis")
+Sex	female	male
+Purpose		
+business	19	78
+car	94	243
+domestic appliances	6	6
+education	24	35
+furniture/equipment	74	107
+radio/TV	85	195
+repairs	5	17
+vacation/others	3	9
+3. Data Preprocessing & Feature Engineering
+3.1. Missing Values Analysis
+def missing_values_table(dataframe):
+    variables_with_na = [col for col in dataframe.columns if dataframe[col].isnull().sum() > 0]
+    n_miss = dataframe[variables_with_na].isnull().sum().sort_values(ascending=False)
+    ratio = (dataframe[variables_with_na].isnull().sum() / dataframe.shape[0] * 100).sort_values(ascending=False)
+    missing_df = pd.concat([n_miss, np.round(ratio, 2)], axis=1, keys=['n_miss', 'ratio'])
+    print(missing_df)
+    return variables_with_na
+
+
+missing_values_table(df)
+                  n_miss  ratio
+Checking account     394 39.400
+Saving accounts      183 18.300
+['Saving accounts', 'Checking account']
+Filling missing values with mode
+
+#Filling missing values with mode
+df["Saving accounts"].fillna(df['Saving accounts'].mode()[0], inplace=True)
+df["Checking account"].fillna(df['Checking account'].mode()[0], inplace=True)
+3.2 Outliers Analysis
+def outlier_thresholds(dataframe, variable):
+    quartile1 = dataframe[variable].quantile(0.25)
+    quartile3 = dataframe[variable].quantile(0.75)
+    interquantile_range = quartile3 - quartile1
+    up_limit = quartile3 + 1.5 * interquantile_range
+    low_limit = quartile1 - 1.5 * interquantile_range
+    return low_limit, up_limit
+
+
+def has_outliers(dataframe, num_col_names, plot=False):
+    variable_names = []
+    for col in num_col_names:
+        low_limit, up_limit = outlier_thresholds(dataframe, col)
+        if dataframe[(dataframe[col] > up_limit) | (dataframe[col] < low_limit)].any(axis=None):
+            number_of_outliers = dataframe[(dataframe[col] > up_limit) | (dataframe[col] < low_limit)].shape[0]
+            print(col, ":", number_of_outliers)
+            variable_names.append(col)
+            if plot:
+                sns.boxplot(x=dataframe[col])
+                plt.show()
+    return variable_names
+
+
+has_outliers(df, num_cols)
+Age : 23
+Job : 370
+Credit amount : 72
+Duration : 70
+['Age', 'Job', 'Credit amount', 'Duration']
+def replace_with_thresholds(dataframe, variable):
+    low_limit, up_limit = outlier_thresholds(dataframe, variable)
+    dataframe.loc[(dataframe[variable] < low_limit), variable] = low_limit
+    dataframe.loc[(dataframe[variable] > up_limit), variable] = up_limit
+
+
+for col in num_cols:
+    replace_with_thresholds(df, col)
+
+has_outliers(df, num_cols)
+[]
+df.head()
+Age	Sex	Job	Housing	Saving accounts	Checking account	Credit amount	Duration	Purpose	Risk	Age_cat
+0	64.500	male	2.000	own	little	little	1169.000	6.000	radio/TV	good	Senior
+1	22.000	female	2.000	own	little	moderate	5951.000	42.000	radio/TV	bad	Student
+2	49.000	male	2.000	own	little	little	2096.000	12.000	education	good	Adult
+3	45.000	male	2.000	free	little	little	7882.000	42.000	furniture/equipment	good	Adult
+4	53.000	male	2.000	free	little	little	4870.000	24.000	car	bad	Adult
+df["Risk"].value_counts()
+good    700
+bad     300
+Name: Risk, dtype: int64
+3.3. Label Encoding & One-Hot Encoding
+#Purpose to Dummies Variable
+df = df.merge(pd.get_dummies(df.Purpose, drop_first=True, prefix='Purpose'), left_index=True, right_index=True)
+#Sex feature in dummies
+df = df.merge(pd.get_dummies(df.Sex, drop_first=True, prefix='Sex'), left_index=True, right_index=True)
+# Housing get dummies
+df = df.merge(pd.get_dummies(df.Housing, drop_first=True, prefix='Housing'), left_index=True, right_index=True)
+# Housing get Saving Accounts
+df = df.merge(pd.get_dummies(df["Saving accounts"], drop_first=True, prefix='Savings'), left_index=True, right_index=True)
+# Housing get Risk
+df = df.merge(pd.get_dummies(df.Risk, prefix='Risk'), left_index=True, right_index=True)
+# Housing get Checking Account
+df = df.merge(pd.get_dummies(df["Checking account"], drop_first=True, prefix='Check'), left_index=True, right_index=True)
+# Housing get Age categorical
+df = df.merge(pd.get_dummies(df["Age_cat"], drop_first=True, prefix='Age_cat'), left_index=True, right_index=True)
+Let's drop categorical and at the same time old variables.
+
+droplist=["Sex","Housing","Saving accounts","Checking account","Purpose","Risk","Risk_good","Age_cat"]
+
+df.drop(droplist, axis= 1, inplace = True)
+3.4. Standardization
+like_num = [col for col in df.columns if df[col].dtypes != 'O' and len(df[col].value_counts()) < 20]
+
+
+cols_need_scale = [col for col in df.columns if col not in "Id"
+                   and col not in "Risk"
+                   and col not in like_num]
+
+df[cols_need_scale].head()
+df[cols_need_scale].describe([0.05, 0.10, 0.25, 0.50, 0.75, 0.80, 0.90, 0.95, 0.99]).T
+hist_for_nums(df, cols_need_scale)
+
+
+def robust_scaler(variable):
+    var_median = variable.median()
+    quartile1 = variable.quantile(0.25)
+    quartile3 = variable.quantile(0.75)
+    interquantile_range = quartile3 - quartile1
+    if int(interquantile_range) == 0:
+        quartile1 = variable.quantile(0.05)
+        quartile3 = variable.quantile(0.95)
+        interquantile_range = quartile3 - quartile1
+        z = (variable - var_median) / interquantile_range
+        return round(z, 3)
+    else:
+        z = (variable - var_median) / interquantile_range
+    return round(z, 3)
+
+
+for col in cols_need_scale:
+    df[col] = robust_scaler(df[col])
+
+
+df[cols_need_scale].head()
+df[cols_need_scale].describe().T
+hist_for_nums(df, cols_need_scale)
+
+
+
+3 variables have been plotted
+
+
+
+3 variables have been plotted
+3.5. Correlation and Heatmap Analysis
+Then look at the correlations between target and independent variables.
+
+plt.figure(figsize=(20,13))
+sns.heatmap(df.corr(),
+            cmap='coolwarm',
+            annot=True,
+            fmt=".2f",
+            annot_kws={'size':16},
+            cbar=False)
+<AxesSubplot:>
+
+Modelling
+#Creating the X and y variables
+X = df.drop('Risk_bad', 1).values
+y = df["Risk_bad"].values
+
+# Spliting X and y into train and test version
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.25, random_state=42)
+# to feed the random state
+seed = 7
+
+# prepare models
+models = []
+# models.append(('LR', LinearRegression()))
+# models.append(('RDR', Ridge()))
+# models.append(('LSSR', Lasso()))
+# models.append(('ER', ElasticNet()))
+models.append(('LGR', LogisticRegression()))
+models.append(('LDA', LinearDiscriminantAnalysis()))
+models.append(('KNN', KNeighborsClassifier()))
+models.append(('CART', DecisionTreeClassifier()))
+models.append(('NB', GaussianNB()))
+models.append(('RF', RandomForestClassifier()))
+models.append(('SVM', SVC(gamma='auto')))
+models.append(('XGBM', XGBClassifier()))
+models.append(('LGBM', LGBMClassifier()))
+
+
+# evaluate each model in turn
+results = []
+names = []
+scoring = 'recall'
+
+for name, model in models:
+        kfold = KFold(n_splits=10, random_state=seed, shuffle=True)
+        cv_results = cross_val_score(model, X_train, y_train, cv=kfold, scoring=scoring)
+        results.append(cv_results)
+        names.append(name)
+        msg = "%s: %f (%f)" % (name, cv_results.mean(), cv_results.std())
+        print(msg)
+        
+# boxplot algorithm comparison
+fig = plt.figure(figsize=(11,6))
+fig.suptitle('Algorithms Compare')
+ax = fig.add_subplot(111)
+green_diamond = dict(markerfacecolor='g', marker='D')
+plt.boxplot(results, flierprops=green_diamond, patch_artist=True)
+ax.set_xticklabels(names)
+plt.show()
+LGR: 0.272724 (0.104171)
+LDA: 0.274640 (0.102902)
+KNN: 0.276635 (0.107262)
+CART: 0.408705 (0.087172)
+NB: 0.542452 (0.126091)
+RF: 0.281936 (0.074989)
+SVM: 0.000000 (0.000000)
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[13:28:01] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[13:28:01] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[13:28:01] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[13:28:01] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[13:28:01] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[13:28:02] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[13:28:02] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[13:28:02] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[13:28:02] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[13:28:02] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+XGBM: 0.338552 (0.061773)
+LGBM: 0.340371 (0.061128)
+
+The Naive Bayes, Decision Tree, LightGBM and XGBoost models are seen as the best methods. Let's subject them to hyperparameter optimization using the verification method one by one.
+
+4.1. Gaussian Naive Bayes Model
+from sklearn.utils import resample
+from sklearn.metrics import roc_curve
+
+GNB = GaussianNB()
+
+# Fitting with train data
+model = GNB.fit(X_train, y_train)
+
+print("Primitive error evaluation accuracy score: ", model.score(X_train, y_train))
+
+y_pred = model.predict(X_test)
+
+print("Test predict accuracy score: ", accuracy_score(y_test,y_pred),"\n")
+
+print("Confussion Matrix: \n", confusion_matrix(y_test, y_pred),"\n")
+
+print("Classification report according to Test prediction: \n", classification_report(y_test, y_pred))
+Primitive error evaluation accuracy score:  0.676
+Test predict accuracy score:  0.62 
+
+Confussion Matrix: 
+ [[122  56]
+ [ 39  33]] 
+
+Classification report according to Test prediction: 
+               precision    recall  f1-score   support
+
+           0       0.76      0.69      0.72       178
+           1       0.37      0.46      0.41        72
+
+    accuracy                           0.62       250
+   macro avg       0.56      0.57      0.56       250
+weighted avg       0.65      0.62      0.63       250
+
+The Naive Bayes model seems to be the best method. Let's see ROC curve for predict probability:
+
+#Predicting proba
+y_pred_prob = model.predict_proba(X_test)[:,1]
+
+# Generate ROC curve values: fpr, tpr, thresholds
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+
+# Plot ROC curve
+plt.plot([0, 1], [0, 1], 'k--')
+plt.plot(fpr, tpr)
+plt.xlabel('False Positive Rate', color="r")
+plt.ylabel('True Positive Rate', color="g")
+plt.title('ROC Curve')
+plt.show()
+
+4.2. XGBOOST Model
+xgb = XGBClassifier(random_state = 12345)
+
+xgb_params = {
+    "learning_rate": [0.01, 0.1, 0.2, 1],
+    "min_samples_split": np.linspace(0.1, 0.5, 10),
+    "max_depth":[3,5,8],
+    "subsample":[0.5, 0.9, 1.0],
+    "n_estimators": [100,1000]}
+
+xgb_cv_model  = GridSearchCV(xgb,xgb_params, cv = 5, n_jobs = -1, verbose = 2).fit(X, y)    # i did cv=5 this is not enough and this is for faster estimate
+
+xgb_tuned = XGBClassifier(**xgb_cv_model.best_params_).fit(X,y)
+cross_val_score(xgb_tuned, X, y, cv = 10).mean()
+Fitting 5 folds for each of 720 candidates, totalling 3600 fits
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:56] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:57] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[14:03:58] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:58] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+C:\ProgramData\Anaconda3\lib\site-packages\xgboost\sklearn.py:1224: UserWarning:
+
+The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
+
+[14:03:58] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:576: 
+Parameters: { "min_samples_split" } might not be used.
+
+  This could be a false alarm, with some parameters getting used by language bindings but
+  then being mistakenly passed down to XGBoost core, or some parameter actually being used
+  but getting flagged wrongly here. Please open an issue if you find any such cases.
+
+
+[14:03:58] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.5.1/src/learner.cc:1115: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+0.708
+4.3. LightGBM Mode
+# model tuning
+
+lgbm = LGBMClassifier()
+lgbm_params = {"learning_rate": [0.01, 0.03, 0.05, 0.1, 0.5],
+               "n_estimators": [500, 1000, 1500],
+               "max_depth": [3,5,8]}
+
+#GridSearchCV method
+gs_cv = GridSearchCV(lgbm,
+                     lgbm_params,
+                     cv=5,                                  # i did cv=5 this is not enough and this is for faster estimate
+                     n_jobs=-1,
+                     verbose=2).fit(X_train, y_train)
+
+#En iyi parametrelerle model kurma
+lgbm_tuned = LGBMClassifier(**gs_cv.best_params_).fit(X, y)
+cross_val_score(lgbm_tuned, X_test, y_test, cv=10).mean()
+
+#cv islemleri(caprazlama)
+kfold = KFold(n_splits=10, random_state=123456, shuffle=True)
+cv_results = cross_val_score(LGBMClassifier(), X_train, y_train, cv=kfold, scoring="accuracy")
+cv_results.mean()
+Fitting 5 folds for each of 45 candidates, totalling 225 fits
+0.656
+4.4. Pipeline Method
+Select features according to the k highest scores and Principal Component Analysis(PCA) then we will apply Logistic Regression with feature union.
+
+from sklearn.pipeline import Pipeline
+from sklearn.pipeline import FeatureUnion
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest
+
+
+features = []
+features.append(('PCA', PCA(n_components=2)))
+features.append(('Select_best', SelectKBest(k=6)))
+feature_union = FeatureUnion(features)
+
+# create pipeline
+estimators = []
+estimators.append(('Feature_union', feature_union))
+estimators.append(('Logistic_regression', LogisticRegression()))
+model = Pipeline(estimators)
+
+# evaluate pipeline
+seed = 7
+kfold = KFold(n_splits=10, random_state=seed, shuffle=True)
+results = cross_val_score(model, X_train, y_train, cv=kfold)
+print(results.mean())
+0.7106666666666667
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+print("Test predict accuracy score: {:.2f}".format(accuracy_score(y_test,y_pred)),"\n")
+
+print("Confussion Matrix: \n", confusion_matrix(y_test, y_pred),"\n")
+
+print("Weighted harmonic mean of precision according to Test prediction: ", fbeta_score(y_test, y_pred, beta=2))
+Test predict accuracy score: 0.70 
+
+Confussion Matrix: 
+ [[160  18]
+ [ 57  15]] 
+
+Weighted harmonic mean of precision according to Test prediction:  0.2336448598130841
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:114: UserWarning:
+
+Features [1] are constant.
+
+C:\ProgramData\Anaconda3\lib\site-packages\sklearn\feature_selection\_univariate_selection.py:116: RuntimeWarning:
+
+invalid value encountered in true_divide
+
+5. Conclusion
+We got different accuracy scores in the all of model estimation evaluation. A very successful modeling has been realized.
+
+ 
